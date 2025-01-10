@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "lib": ["deno.window"],
+    "types": ["npm:@types/inquirer", "types.ts"]
   },
   "nodeModulesDir": "auto",
   "lint": {

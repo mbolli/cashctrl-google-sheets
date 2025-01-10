@@ -1,4 +1,13 @@
+import { CashCtrlAnswer } from "./types.ts";
+
+/**
+ * CashCtrl API class
+ */
 export class CashCtrlApi {
+  /**
+   * Make a request to the CashCtrl API using the given endpoint and method
+   * Note: The API key and domain ID are expected to be set as environment variables
+   */
   public static async request<T>(
     endpoint: string,
     method: "POST" | "GET" = "GET",
@@ -31,18 +40,24 @@ export class CashCtrlApi {
         );
       }
 
-      const data = await response.json();
-      return data;
+      return response.json();
     } catch (error) {
       console.error("Error fetching data:", error);
       throw error;
     }
   }
 
+  /**
+   * Check if the given data is XML-like
+   */
   public static isXmlLike(data: string): boolean {
-    return data.includes("<values>") && data.includes("</values>");
+    return data.includes("<values>");
   }
 
+  /**
+   * Parse XML-like string to object
+   * Resolves `<values><de>Übersetzung</de></values>` to `{ de: "Übersetzung" }`
+   */
   public static parseXmlLike(data: string): Record<string, string> {
     const result: Record<string, string> = {};
 
@@ -68,11 +83,18 @@ export class CashCtrlApi {
     return result;
   }
 
+  /**
+   * Get the translation for the given data using the current language
+   */
   public static getTranslation(data: string): string {
     if (!CashCtrlApi.isXmlLike(data)) return data;
-    return CashCtrlApi.parseXmlLike(data)[Deno.env.get("LANGUAGE")] ?? data;
+    return CashCtrlApi.parseXmlLike(data)[Deno.env.get("LANGUAGE") ?? "de"] ??
+      data;
   }
 
+  /**
+   * For custom fields, we need to encode the data as XML-like string
+   */
   public static encodeCustomField(data: Record<string, string>): string {
     const xmlParts = ["<values>"];
 

@@ -1,9 +1,9 @@
-type DateRange = {
+export type DateRange = {
   startDate: Date;
   endDate: Date;
 };
 
-type SpreadsheetRow = {
+export type SpreadsheetRow = {
   date: number; // Column 0: date
   client: string; // Column 1: client
   project: string; // Column 2: project
@@ -14,14 +14,14 @@ type SpreadsheetRow = {
   billed: boolean; // Column 7: billed
 };
 
-type SpreadsheetTable = SpreadsheetRow[];
+export type SpreadsheetTable = SpreadsheetRow[];
 
-type CashCtrlAnswer<T> = {
+export type CashCtrlAnswer<T> = {
   total: number;
   data: T[];
 };
 
-type CashCtrlPerson = {
+export type CashCtrlPerson = {
   id: number; // Unique identifier for the person
   created: string; // Creation date and time
   createdBy: string; // Email of the creator
@@ -72,7 +72,7 @@ type CashCtrlPerson = {
   isInactive: boolean; // Indicates if the person is inactive
 };
 
-type CashCtrlStatus = {
+export type CashCtrlStatus = {
   id: number;
   created: string | null;
   createdBy: string;
@@ -92,7 +92,7 @@ type CashCtrlStatus = {
   isClosed: boolean;
 };
 
-type CashCtrlBookTemplate = {
+export type CashCtrlBookTemplate = {
   id: number;
   created: string;
   createdBy: string;
@@ -108,7 +108,7 @@ type CashCtrlBookTemplate = {
   isAllowTax: boolean;
 };
 
-type CashCtrlCategory = {
+export type CashCtrlCategory = {
   id: number;
   created: string;
   createdBy: string;
@@ -124,7 +124,7 @@ type CashCtrlCategory = {
   responsiblePersonId: number | null;
   roundingId: number | null;
   fileId: number | null;
-  attachments: { file: string }[]; // Adjust type as necessary
+  attachments: { file: string }[]; // Adjust export type as necessary
   nameSingular: string; // Assuming this is a string representation of a localized value
   namePlural: string; // Assuming this is a string representation of a localized value
   type: string;
@@ -150,7 +150,7 @@ type CashCtrlCategory = {
 };
 
 // types.ts
-interface CashCtrlOrder {
+export type CashCtrlOrder = {
   id: number; // Unique identifier for the invoice
   created: string; // Creation date and time
   createdBy: string; // Email of the creator
@@ -168,8 +168,8 @@ interface CashCtrlOrder {
   groupId: number; // Group ID
   previousId: number | null; // ID of the previous invoice or null
   statusId: number; // Status ID
-  type: string; // Type of the invoice (e.g., SALES)
-  bookType: string; // Type of booking (e.g., DEBIT)
+  type: string; // export type of the invoice (e.g., SALES)
+  bookType: string; // export type of booking (e.g., DEBIT)
   statusName: string; // Status name in multiple languages
   sentStatusId: number; // Sent status ID
   roundingId: number | null; // Rounding ID or null
@@ -199,7 +199,7 @@ interface CashCtrlOrder {
   startDate: string | null; // Start date or null
   endDate: string | null; // End date or null
   daysBefore: number | null; // Days before notification or null
-  notifyType: string | null; // Notification type or null
+  notifyType: string | null; // Notification export type or null
   notifyPersonId: number | null; // ID of the notified person or null
   notifyUserId: number | null; // ID of the notified user or null
   notifyEmail: string | null; // Email for notifications or null
@@ -220,9 +220,8 @@ interface CashCtrlOrder {
   isDisplayItemGross: boolean; // Indicates if gross items are displayed
   isRecurring: boolean; // Indicates if it is a recurring invoice
   isCreditNote: boolean; // Indicates if it is a credit note
-}
-
-type CashCtrlItem = {
+};
+export type CashCtrlItem = {
   id: number;
   created: string; // ISO 8601 date string
   createdBy: string;
@@ -234,8 +233,8 @@ type CashCtrlItem = {
   taxId: number;
   unitId: number;
   unitName: string; // XML-like string
-  attachments: { file: string }[]; // Adjust type as necessary
-  allocations: { id: number }[]; // Adjust type as necessary
+  attachments: { file: string }[]; // Adjust export type as necessary
+  allocations: { id: number }[]; // Adjust export type as necessary
   type: "ARTICLE" | "TEXT" | "PAGEBREAK" | "SUBTOTAL" | "TITLE" | "OPTIONTOTAL";
   articleNr: string;
   quantity: number;
@@ -262,7 +261,7 @@ type CashCtrlItem = {
   isInventoryArticle: boolean;
 };
 
-type CashCtrlAccount = {
+export type CashCtrlAccount = {
   id: number;
   created: string; // ISO 8601 date string
   createdBy: string;
@@ -277,7 +276,7 @@ type CashCtrlAccount = {
   currencyCode: string;
   number: string;
   name: string; // XML-like string
-  custom: string | null; // Adjust type as necessary
+  custom: string | null; // Adjust export type as necessary
   notes: string | null;
   attachmentCount: number;
   allocationCount: number;
@@ -293,7 +292,7 @@ type CashCtrlAccount = {
   isInactive: boolean;
 };
 
-type CashCtrlAccountCategory = {
+export type CashCtrlAccountCategory = {
   id: number;
   created: string; // ISO 8601 date string
   createdBy: string;
@@ -307,12 +306,12 @@ type CashCtrlAccountCategory = {
   isSystem: boolean;
 };
 
-type CashCtrlUnit = {
+export type CashCtrlUnit = {
   id: number;
   name: string; // XML-like string
 };
 
-type CashCtrlTax = {
+export type CashCtrlTax = {
   id: number;
   created: string; // ISO 8601 date string
   createdBy: string;

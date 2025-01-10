@@ -1,9 +1,16 @@
 # Google Sheets to CashCtrl Orders
 
-This project demonstrates how to create [CashCtrl](https://cashctrl.com) orders
-directly from a Google Sheet using the Google Sheets API and OAuth2 in Deno. It
-allows you to automatically generate CashCtrl orders from time tracking data
-stored in Google Sheets.
+[![deno version](https://img.shields.io/badge/deno-^2.0-lightgrey?logo=deno)](https://deno.land)
+[![GitHub license](https://img.shields.io/github/license/mbolli/cashctrl-google-sheets)](https://github.com/mbolli/cashctrl-google-sheets/blob/main/LICENSE)
+[![Made with TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)](https://www.typescriptlang.org)
+
+Track your time in Google Sheets and automatically generate
+[CashCtrl](https://cashctrl.com) orders with a single command! This project
+bridges the gap between your time tracking and invoicing workflows. Simply log
+your hours in a Google Sheet, and with one command, create professional CashCtrl
+orders - no manual data entry required. Perfect for freelancers and small
+businesses who want to streamline their billing process while keeping time
+tracking simple and flexible.
 
 ## Demo
 
