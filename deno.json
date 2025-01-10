@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+  },
+  "nodeModulesDir": "auto",
+  "lint": {
+    "include": ["**/*.ts"]
+  },
+  "tasks": {
+    "start": "deno run --allow-read --allow-net --allow-env --allow-write --env-file main.ts"
+  }
+}
