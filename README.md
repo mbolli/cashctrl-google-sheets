@@ -1,7 +1,7 @@
 # Google Sheets to CashCtrl Orders
 
 [![deno version](https://img.shields.io/badge/deno-^2.0-lightgrey?logo=deno)](https://deno.land)
-[![GitHub license](https://img.shields.io/github/license/mbolli/cashctrl-google-sheets)](https://github.com/mbolli/cashctrl-google-sheets/blob/main/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/mbolli/cashctrl-google-sheets)](https://github.com/mbolli/cashctrl-google-sheets/blob/master/LICENSE)
 [![Made with TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)](https://www.typescriptlang.org)
 
 Track your time in Google Sheets and automatically generate
