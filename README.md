@@ -14,7 +14,7 @@ tracking simple and flexible.
 
 ## Demo
 
-TBD
+![google-sheets-cashctrl](https://github.com/user-attachments/assets/34d775a1-4071-409f-a5c1-6423e41abeba)
 
 ## Configuration
 
