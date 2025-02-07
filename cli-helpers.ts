@@ -34,7 +34,11 @@ export class CliHelpers {
     sheetData: SpreadsheetTable,
   ): Promise<string[]> {
     const uniqueClients = [...new Set(sheetData.map((row) => row.client))];
-    // todo match this client with cashCtrl client?
+
+    if (uniqueClients.length === 0) {
+      console.log("%cNo order positions found with the supplied date and billed=false. Exiting...", "color: red");
+      Deno.exit();
+    }
 
     return await checkbox(
       {
