@@ -50,7 +50,7 @@ Deno.addSignalListener("SIGINT", () => {
 });
 
 async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
-  const associates = await CashCtrlApi.request<CashCtrlPerson>(
+  const associates = await CashCtrlApi.request<CashCtrlPerson[]>(
     "/person/list.json",
   );
   const selectedAssociate = await select({
@@ -58,7 +58,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     choices: associates.data.map((a) => ({ name: a.name, value: a.id })),
   });
 
-  const categories = await CashCtrlApi.request<CashCtrlCategory>(
+  const categories = await CashCtrlApi.request<CashCtrlCategory[]>(
     "/order/category/list.json",
   );
   const selectedCategory = await select({
@@ -72,10 +72,10 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
   const selectedAccount = await CliHelpers.selectAccount("Select account");
 
   const units =
-    (await CashCtrlApi.request<CashCtrlUnit>("/inventory/unit/list.json"))
+    (await CashCtrlApi.request<CashCtrlUnit[]>("/inventory/unit/list.json"))
       ?.data;
   const unit = units.filter((u) => u.name.includes("Std"))[0];
-  const taxes = (await CashCtrlApi.request<CashCtrlTax>("/tax/list.json"))
+  const taxes = (await CashCtrlApi.request<CashCtrlTax[]>("/tax/list.json"))
     ?.data;
   const tax = taxes.filter((t) => t.name.includes("MwSt. 8.1%"))[0];
   const categoryInfo = categories.data.find((c) => c.id === selectedCategory);

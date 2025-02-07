@@ -18,7 +18,7 @@ export type SpreadsheetTable = SpreadsheetRow[];
 
 export type CashCtrlAnswer<T> = {
   total: number;
-  data: T[];
+  data: T;
 };
 
 export type CashCtrlPerson = {
@@ -157,7 +157,7 @@ export type CashCtrlOrder = {
   lastUpdated: string; // Last updated date and time
   lastUpdatedBy: string; // Email of the last updater
   associateId: number; // ID of the associated person
-  items: string; // JSON encoded Partial<CashCtrlItem>[]
+  items: string|Partial<CashCtrlItem>[]; // JSON encoded Partial<CashCtrlItem>[]
   associateName: string; // Name of the associated person
   responsiblePersonId: number | null; // ID of the responsible person or null
   responsiblePersonName: string | null; // Name of the responsible person or null

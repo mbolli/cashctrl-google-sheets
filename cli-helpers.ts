@@ -56,11 +56,11 @@ export class CliHelpers {
   }
 
   public static async selectAccount(message: string): Promise<number> {
-    const accounts = await CashCtrlApi.request<CashCtrlAccount>(
+    const accounts = await CashCtrlApi.request<CashCtrlAccount[]>(
       "/account/list.json",
     );
     const accountCategories = await CashCtrlApi.request<
-      CashCtrlAccountCategory
+      CashCtrlAccountCategory[]
     >(
       "/account/category/list.json",
     );
