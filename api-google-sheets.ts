@@ -97,7 +97,7 @@ export class GoogleSheetsApi {
     // filter by dateRange
     const filteredData = data.filter((row) => {
       const rowDate = new Date(row.date);
-      return rowDate >= dateRange.startDate && rowDate <= dateRange.endDate;
+      return rowDate >= dateRange.startDate && rowDate <= dateRange.endDate && row.billed === false;
     });
 
     console.log(
