@@ -43,6 +43,8 @@ tracking simple and flexible.
 
 ## Google Sheet Structure
 
+Copy [this sheet](https://docs.google.com/spreadsheets/d/1-8gaZBwpIlRtElbI0ouJaIscDPKuDJvDFOugf0N5KdM/edit?usp=sharing) as a starting point!
+
 Your Google Sheet should have the following columns corresponding to the
 `SpreadsheetRow` type:
 
