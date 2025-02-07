@@ -148,6 +148,10 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     orderData,
   );
   console.log("Order created:", orderResponse);
+
+  if (await confirm({message: 'Update billed flag in Google sheet?', default: false})) {
+    await GoogleSheetsApi.flagBilledPositions(sheetData.map(row => row.row));
+  }
 }
 
 const dateRange = await CliHelpers.selectMonth();

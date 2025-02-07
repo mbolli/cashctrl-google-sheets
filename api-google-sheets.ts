@@ -4,11 +4,16 @@ import { DateRange, SpreadsheetRow, SpreadsheetTable } from "./types.ts";
 
 export class GoogleSheetsApi {
   private static SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+  private static client: OAuth2Client;
 
   /**
    * Authenticates with Google API using OAuth2.0.
    */
   private static async googleAuthenticate(): Promise<OAuth2Client> {
+    if (this.client !== undefined) {
+      return this.client;
+    }
+
     const credentials = JSON.parse(
       await Deno.readTextFile("credentials.json") as string,
     );
@@ -29,6 +34,7 @@ export class GoogleSheetsApi {
       }
       oAuth2Client.setCredentials(tokenData);
       console.log("Credentials loaded from token.json");
+      this.client = oAuth2Client;
       return oAuth2Client;
     } catch (_error) {
       // Generate a URL for the user to authorize the app
@@ -51,6 +57,7 @@ export class GoogleSheetsApi {
       );
 
       console.log("Token obtained and stored!");
+      this.client = oAuth2Client;
       return oAuth2Client;
     }
   }
@@ -69,24 +76,15 @@ export class GoogleSheetsApi {
       range: "Rechnungen!A1:J",
       valueRenderOption: "UNFORMATTED_VALUE",
     });
-
-    // convert date from Excel to JS
-    const cleanData = response.data.values?.map((row) => {
-      const date = new Date((row[0] - 25569) * 86400 * 1000);
-      return isNaN(date.getDate())
-        ? row
-        : [date.toISOString().split("T")[0], ...row.slice(1)];
-    }) ?? [];
-
-    // filter by dateRange
-    const filteredData = cleanData.filter((row) => {
-      const rowDate = new Date(row[0]);
-      return rowDate >= dateRange.startDate && rowDate <= dateRange.endDate;
-    });
+    const convertDate = (dateVal: number) => {
+      const date = new Date((dateVal - 25569) * 86400 * 1000);
+      return isNaN(date.getDate()) ? dateVal : date.toISOString().split("T")[0];
+    }
 
     // convert to typed object SpreadsheetRow
-    const typedData: SpreadsheetTable = filteredData.map((d) => ({
-      date: d[0],
+    const data: SpreadsheetTable = response.data.values?.map((d, i) => ({
+      row: ++i,
+      date: convertDate(d[0]), // convert date from Excel to JS
       client: d[1],
       project: d[2],
       description: d[3],
@@ -94,15 +92,43 @@ export class GoogleSheetsApi {
       pricePerHour: d[5],
       total: d[6],
       billed: d[7],
-    }));
+    })) ?? [];
+
+    // filter by dateRange
+    const filteredData = data.filter((row) => {
+      const rowDate = new Date(row.date);
+      return rowDate >= dateRange.startDate && rowDate <= dateRange.endDate;
+    });
 
     console.log(
       "Data:",
-      typedData.map((r) =>
-        `${r.date} ${r.client} ${r.project} ${r.description}`
+      filteredData.map((r) =>
+        `#${r.row} ${r.date} ${r.client} ${r.project} ${r.description}`
       ),
     );
-    return typedData;
+    return filteredData;
+  }
+
+  public static async flagBilledPositions(positions: number[]): Promise<void> {
+    const authClient = await GoogleSheetsApi.googleAuthenticate();
+    const sheets = google.sheets({ version: "v4", auth: authClient });
+
+    try {
+      const response = await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: Deno.env.get("SPREADSHEET_ID"),
+        requestBody: {
+          data: positions.map(rowNumber => ({
+            // Assumes the sheet is named "Sheet1". Change if needed.
+            range: `Rechnungen!H${rowNumber}`,
+            values: [[true]]
+          })),
+          valueInputOption: 'USER_ENTERED' // Or 'RAW' if preferred.
+        }
+      });
+      console.log(`Updated ${response.data.totalUpdatedCells} cells.`);
+    } catch (error) {
+      console.error('Error updating sheet:', error);
+    }
   }
 
   public static groupPositions(

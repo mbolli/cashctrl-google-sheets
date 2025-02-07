@@ -4,7 +4,8 @@ export type DateRange = {
 };
 
 export type SpreadsheetRow = {
-  date: number; // Column 0: date
+  row: number;
+  date: string | number; // Column 0: date
   client: string; // Column 1: client
   project: string; // Column 2: project
   description: string; // Column 3: description
