@@ -12,6 +12,19 @@ orders - no manual data entry required. Perfect for freelancers and small
 businesses who want to streamline their billing process while keeping time
 tracking simple and flexible.
 
+## Features
+
+- Select order positions from your configured Google sheet
+  - Filter by date span (column A)
+  - Filter by client name (column B)
+  - Always filters by `billed` flag (column H), so only unbilled positions are processed
+- Select data from your CashCtrl account
+  - Client/associate
+  - Document category
+  - Account
+- Create new order or modify existing one (replace or append order items)
+- Update the Google sheet (update `billed` flag)
+
 ## Demo
 
 ![google-sheets-cashctrl](https://github.com/user-attachments/assets/34d775a1-4071-409f-a5c1-6423e41abeba)
@@ -64,6 +77,15 @@ Your Google Sheet should have the following columns corresponding to the
 - [CashCtrl API Documentation](https://app.cashctrl.com/static/help/en/api/index.html)
 - [Google APIs Node.js Client Documentation](https://googleapis.dev/nodejs/googleapis/latest/sheets/index.html)
 
-## Dependencies
+## Development
 
 This project depends on Deno version 2.0.0 or higher.
+
+Before submitting a PR, please execute
+
+```bash
+deno lint
+deno check main.ts
+```
+
+and fix the issues.
