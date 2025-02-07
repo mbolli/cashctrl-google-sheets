@@ -54,7 +54,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     "/person/list.json",
   );
   const selectedAssociate = await select({
-    message: "Select client",
+    message: "Select associate",
     choices: associates.data.map((a) => ({ name: a.name, value: a.id })),
   });
 
@@ -62,11 +62,12 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     "/order/category/list.json",
   );
   const selectedCategory = await select({
-    message: "Select category",
+    message: "Select document category",
     choices: categories.data.map((c) => ({
       name: CashCtrlApi.getTranslation(c.nameSingular),
       value: c.id,
     })),
+    default: 4, // default to rechnung
   });
 
   const selectedAccount = await CliHelpers.selectAccount("Select account");
