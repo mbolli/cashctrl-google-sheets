@@ -1,4 +1,4 @@
-import { select } from "npm:@inquirer/prompts";
+import { select, confirm } from "npm:@inquirer/prompts";
 import { GoogleSheetsApi } from "./api-google-sheets.ts";
 import { CashCtrlApi } from "./api-cash-ctrl.ts";
 import { CliHelpers } from "./cli-helpers.ts";
@@ -82,6 +82,30 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
   const categoryName = CashCtrlApi.getTranslation(
     categoryInfo?.nameSingular ?? "",
   );
+
+  let overrideOrder: CashCtrlOrder|null = null;
+  let replaceItems = false;
+  if (await confirm({message: `Update an existing ${categoryName}? This will only touch the order items/positions.`, default: false})) {
+    const queryParams = new URLSearchParams({
+      categoryId: categoryInfo?.id?.toString() ?? '',
+      onlyOpen: 'true',
+      filter: JSON.stringify([{
+        comparison: 'eq',
+        field: 'associateId',
+        value: selectedAssociate.toString()
+      }])
+    });
+    const orders = await CashCtrlApi.request<CashCtrlOrder[]>(`/order/list.json?${queryParams.toString()}`);
+    const overrideOrderId = await select({
+      message: "Select order to update",
+      choices: orders.data.map(o => ({ name: `${o.nr}: ${o.description ?? ''}`, value: o.id}))
+    });
+    const overrideOrderRequest = await CashCtrlApi.request<CashCtrlOrder>(`/order/read.json?id=${overrideOrderId}`);
+    overrideOrder = overrideOrderRequest.data;
+
+    replaceItems = await confirm({message: `Replace ${overrideOrder.nr} order items with selected Google sheet rows? Default is to append them.`, default: false});
+  }
+
   const localizedDate = (date: Date) => {
     const options: Intl.DateTimeFormatOptions = {
       year: "numeric",
@@ -90,7 +114,8 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     };
     return date.toLocaleDateString("de-DE", options);
   };
-  const orderData: Partial<CashCtrlOrder> = {
+
+  let orderData: Partial<CashCtrlOrder> = {
     associateId: selectedAssociate,
     categoryId: selectedCategory,
     date: (new Date()).toISOString().split("T")[0],
@@ -98,7 +123,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
       localizedDate(dateRange.endDate)
     }`,
     dueDays: 10,
-    items: JSON.stringify(sheetData.map((row) => ({
+    items: sheetData.map((row) => ({
       accountId: selectedAccount,
       name: `${row.client}: ${row.project}`,
       description: row.description,
@@ -107,13 +132,18 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
       unitPrice: row.pricePerHour * 1.081, // apply tax
       unitId: unit.id,
       taxId: tax.id,
-    } as Partial<CashCtrlItem>))),
+    } as Partial<CashCtrlItem>)),
     language: "DE",
     notes: "created by cashctrl-google-sheets",
   };
+  if (overrideOrder !== null && replaceItems === false && Array.isArray(overrideOrder.items) && Array.isArray(orderData.items)) {
+    overrideOrder.items = [...overrideOrder.items, ...orderData.items];
+    orderData = overrideOrder;
+  }
+  orderData.items = JSON.stringify(orderData.items);
 
   const orderResponse = await CashCtrlApi.request<Partial<CashCtrlOrder>>(
-    "/order/create.json",
+    overrideOrder === null ? "/order/create.json" : "/order/update.json",
     "POST",
     orderData,
   );
