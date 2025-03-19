@@ -131,13 +131,13 @@ export class GoogleSheetsApi {
     }
   }
 
-  public static groupPositions(
-    sheetData: SpreadsheetTable,
-    clients: string[],
-  ): SpreadsheetTable {
+  public static filterPositions(sheetData: SpreadsheetTable, clients: string[]): SpreadsheetTable {
+    return sheetData.filter(row => clients.includes(row.client));
+  }
+
+  public static groupPositions(sheetData: SpreadsheetTable): SpreadsheetTable {
     const groupedPositions: Record<string, SpreadsheetRow> = sheetData.reduce(
       (acc, row) => {
-        if (!clients.includes(row.client)) return acc;
         const group = `${row.client}${row.project}`;
         if (!acc[group]) {
           acc[group] = { ...row, description: `- ${row.description}\n` };

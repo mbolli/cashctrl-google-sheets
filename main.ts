@@ -154,7 +154,9 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     orderData,
   );
   console.log("Order created:", orderResponse);
+}
 
+async function updateSheet(sheetData: SpreadsheetTable): Promise<void> {
   if (await confirm({message: 'Update billed flag in Google sheet?', default: false})) {
     await GoogleSheetsApi.flagBilledPositions(sheetData.map(row => row.row));
   }
@@ -163,6 +165,8 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
 const dateRange = await CliHelpers.selectMonth();
 const sheetData = await GoogleSheetsApi.getSheetData(dateRange);
 const clients = await CliHelpers.selectClients(sheetData);
-const groupedSheetData = GoogleSheetsApi.groupPositions(sheetData, clients);
+const filteredSheetData = GoogleSheetsApi.filterPositions(sheetData, clients);
+const groupedSheetData = GoogleSheetsApi.groupPositions(filteredSheetData);
 await createOrder(groupedSheetData);
+await updateSheet(filteredSheetData);
 Deno.exit();
