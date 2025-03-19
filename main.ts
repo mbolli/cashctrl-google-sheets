@@ -1,4 +1,4 @@
-import { select, confirm } from "npm:@inquirer/prompts";
+import { select, confirm, input } from "npm:@inquirer/prompts";
 import { GoogleSheetsApi } from "./api-google-sheets.ts";
 import { CashCtrlApi } from "./api-cash-ctrl.ts";
 import { CliHelpers } from "./cli-helpers.ts";
@@ -107,6 +107,11 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     replaceItems = await confirm({message: `Replace ${overrideOrder.nr} order items with selected Google sheet rows? Default is to append them.`, default: false});
   }
 
+  let notes = null;
+  if (await confirm({message: `Do you want to add (internal) notes to your order?`, default: false})) {
+    notes = await input({message: `Internal note`});
+  }
+
   const localizedDate = (date: Date) => {
     const options: Intl.DateTimeFormatOptions = {
       year: "numeric",
@@ -135,7 +140,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
       taxId: tax.id,
     } as Partial<CashCtrlItem>)),
     language: "DE",
-    notes: "created by cashctrl-google-sheets",
+    notes,
   };
   if (overrideOrder !== null && replaceItems === false && Array.isArray(overrideOrder.items) && Array.isArray(orderData.items)) {
     overrideOrder.items = [...overrideOrder.items, ...orderData.items];
