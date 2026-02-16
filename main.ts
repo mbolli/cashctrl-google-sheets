@@ -2,58 +2,41 @@ import { select, confirm, input } from "npm:@inquirer/prompts";
 import { GoogleSheetsApi } from "./api-google-sheets.ts";
 import { CashCtrlApi } from "./api-cash-ctrl.ts";
 import { CliHelpers } from "./cli-helpers.ts";
+import { Config } from "./config.ts";
 import type {
   CashCtrlCategory,
   CashCtrlItem,
   CashCtrlOrder,
   CashCtrlPerson,
   CashCtrlUnit,
+  DateRange,
   SpreadsheetTable,
 } from "./types.ts";
 
-// set up environment variables
-Deno.env.get("SPREADSHEET_ID") ||
-  await CliHelpers.promptForEnvInput(
-    "SPREADSHEET_ID",
-    "Please enter your Google Sheets SPREADSHEET_ID:",
-  );
-Deno.env.get("CASHCTRL_DOMAINID") ||
-  await CliHelpers.promptForEnvInput(
-    "CASHCTRL_DOMAINID",
-    "Please enter your CashCtrl subdomain (e.g. 'mycompanyltd'):",
-  );
-Deno.env.get("CASHCTRL_APIKEY") ||
-  await CliHelpers.promptForEnvInput(
-    "CASHCTRL_APIKEY",
-    "Please enter your CashCtrl API key:",
-  );
-Deno.env.get("CASHCTRL_ITEMS_ORDER") || await CliHelpers.promptForEnvInput(
-  "CASHCTRL_ITEMS_ORDER",
-  "Please enter the default order for items ('none' or field name, e.g. 'client' or 'project'):",
-);
-Deno.env.get("CASHCTRL_DEFAULT_ACCOUNT") ||
-  await CliHelpers.promptForEnvInput(
-    "CASHCTRL_DEFAULT_ACCOUNT",
-    "Please select your default CashCtrl account:",
-  );
-Deno.env.get("CASHCTRL_DEFAULT_TAX") ||
-  await CliHelpers.promptForEnvInput(
-    "CASHCTRL_DEFAULT_TAX",
-    "Please select your default CashCtrl tax:",
-  );
-Deno.env.get("LANGUAGE") ||
-  await CliHelpers.promptForEnvInput(
-    "LANGUAGE",
-    "Please enter the default LANGUAGE code (e.g., 'de' for German):",
-  );
-
-// gracefully exit on SIGINT
+// Gracefully handle Ctrl-C (SIGINT)
 Deno.addSignalListener("SIGINT", () => {
-  console.log("\n👋 until next time!");
-  Deno.exit();
+  console.log("\n\n👋 Interrupted. Goodbye!");
+  Deno.exit(0);
 });
 
-async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
+// Initialize and validate configuration
+try {
+  await Config.initialize();
+  Config.validate();
+} catch (error) {
+  if (error instanceof Error && (
+    error.message.includes("User force closed") ||
+    error.message.includes("canceled") ||
+    error.message.includes("cancelled") ||
+    error.name === "ExitPromptError"
+  )) {
+    console.log("\n👋 Cancelled during setup. Run again when ready!");
+    Deno.exit(0);
+  }
+  throw error;
+}
+
+async function createOrder(sheetData: SpreadsheetTable, dateRange: DateRange): Promise<void> {
   const associates = await CashCtrlApi.request<CashCtrlPerson[]>(
     "/person/list.json",
   );
@@ -71,7 +54,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
       name: CashCtrlApi.getTranslation(c.nameSingular),
       value: c.id,
     })),
-    default: 4, // default to rechnung
+    default: Config.getNumber("CASHCTRL_DEFAULT_CATEGORY"),
   });
 
   const selectedAccount = await CliHelpers.selectAccount("Select account");
@@ -85,7 +68,11 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
   const units =
     (await CashCtrlApi.request<CashCtrlUnit[]>("/inventory/unit/list.json"))
       ?.data;
-  const unit = units.filter((u) => u.name.includes("Std"))[0];
+  const unitFilter = Config.get("CASHCTRL_UNIT_FILTER");
+  const unit = units.find((u) => u.name.includes(unitFilter));
+  if (!unit) {
+    throw new Error(`No unit found matching filter '${unitFilter}'. Available units: ${units.map(u => CashCtrlApi.getTranslation(u.name)).join(", ")}`);
+  }
   const categoryInfo = categories.data.find((c) => c.id === selectedCategory);
   const categoryName = CashCtrlApi.getTranslation(
     categoryInfo?.nameSingular ?? "",
@@ -125,7 +112,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
       month: "long",
       day: "numeric",
     };
-    return date.toLocaleDateString("de-DE", options);
+    return date.toLocaleDateString(Config.get("DATE_LOCALE"), options);
   };
 
   let orderData: Partial<CashCtrlOrder> = {
@@ -149,9 +136,17 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     language: "DE",
     notes,
   };
-  if (overrideOrder !== null && replaceItems === false && Array.isArray(overrideOrder.items) && Array.isArray(orderData.items)) {
-    overrideOrder.items = [...overrideOrder.items, ...orderData.items];
-    orderData = overrideOrder;
+  if (overrideOrder !== null && replaceItems === false) {
+    // Parse items from API response (comes as JSON string)
+    const existingItems = typeof overrideOrder.items === 'string' 
+      ? JSON.parse(overrideOrder.items) as Partial<CashCtrlItem>[]
+      : overrideOrder.items;
+    
+    if (Array.isArray(existingItems) && Array.isArray(orderData.items)) {
+      orderData.items = [...existingItems, ...orderData.items];
+    }
+    // Preserve other order fields when updating
+    orderData = { ...overrideOrder, ...orderData };
   }
   orderData.items = JSON.stringify(orderData.items);
 
@@ -160,9 +155,20 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
     "POST",
     orderData,
   );
-  if (orderResponse.success) console.log("Order created:", orderResponse);
-  else {
-      console.log("Order creation failed:", orderResponse);
+  
+  if (orderResponse.success) {
+    const action = overrideOrder === null ? "created" : "updated";
+    console.log(`✓ Order ${action} successfully:`, {
+      insertId: orderResponse.insertId,
+      message: orderResponse.message,
+    });
+  } else {
+    const action = overrideOrder === null ? "creation" : "update";
+    console.error(`✗ Order ${action} failed:`, {
+      message: orderResponse.message,
+      errors: orderResponse.errors,
+    });
+    throw new Error(`Order ${action} failed: ${orderResponse.message}`);
   }
 }
 
@@ -172,11 +178,33 @@ async function updateSheet(sheetData: SpreadsheetTable): Promise<void> {
   }
 }
 
-const dateRange = await CliHelpers.selectMonth();
-const sheetData = await GoogleSheetsApi.getSheetData(dateRange);
-const clients = await CliHelpers.selectClients(sheetData);
-const filteredSheetData = GoogleSheetsApi.filterPositions(sheetData, clients);
-const groupedSheetData = GoogleSheetsApi.groupPositions(filteredSheetData);
-await createOrder(groupedSheetData);
-await updateSheet(filteredSheetData);
-Deno.exit();
+// Main execution with graceful error handling
+async function main() {
+  try {
+    const dateRange = await CliHelpers.selectMonth();
+    const sheetData = await GoogleSheetsApi.getSheetData(dateRange);
+    const clients = await CliHelpers.selectClients(sheetData);
+    const filteredSheetData = GoogleSheetsApi.filterPositions(sheetData, clients);
+    const groupedSheetData = GoogleSheetsApi.groupPositions(filteredSheetData);
+    await createOrder(groupedSheetData, dateRange);
+    await updateSheet(filteredSheetData);
+    console.log("\n✓ Done!");
+    Deno.exit(0);
+  } catch (error) {
+    // Handle user cancellation (Ctrl-C)
+    if (error instanceof Error && (
+      error.message.includes("User force closed") ||
+      error.message.includes("canceled") ||
+      error.message.includes("cancelled") ||
+      error.name === "ExitPromptError"
+    )) {
+      console.log("\n👋 Cancelled. See you next time!");
+      Deno.exit(0);
+    }
+    // Handle other errors
+    console.error("\n✗ Error:", error instanceof Error ? error.message : error);
+    Deno.exit(1);
+  }
+}
+
+main();

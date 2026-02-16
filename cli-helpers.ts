@@ -7,7 +7,7 @@ import type {
 } from "./types.ts";
 import inquirer from "npm:inquirer";
 import { CashCtrlApi } from "./api-cash-ctrl.ts";
-import { checkbox, search, select } from "npm:@inquirer/prompts";
+import { checkbox, select } from "npm:@inquirer/prompts";
 
 export class CliHelpers {
   public static async selectMonth(): Promise<DateRange> {
@@ -80,36 +80,25 @@ export class CliHelpers {
         CashCtrlApi.getTranslation(account.name)
       }`;
 
-    const defaultAccountId = Number(Deno.env.get("CASHCTRL_DEFAULT_ACCOUNT"));
-    const defaultAccount = accounts.data.find((a) => a.id === defaultAccountId);
-    if (defaultAccount) {
-      message += ` (default: ${formatAccount(defaultAccount)})`;
-    }
+    // Handle case where default isn't set yet (during initialization)
+    const defaultAccountIdStr = Deno.env.get("CASHCTRL_DEFAULT_ACCOUNT");
+    const defaultAccountId = defaultAccountIdStr ? Number(defaultAccountIdStr) : undefined;
 
-    return search({
+    const selectedAccountId = await select({
       message: message,
-      source: (term: string | undefined) => {
-        if (!term || term.length === 0) {
-          if (!defaultAccount) return [];
-          return [{
-            name: formatAccount(defaultAccount),
-            value: defaultAccountId,
-          }];
-        }
-        const foundAccounts = accounts.data.filter((account) =>
-          account.name.toLowerCase().includes(term.toLowerCase()) ||
-          account.number.toLowerCase().includes(term.toLowerCase()) ||
-          accountCategoryMap[account.categoryId].toLowerCase().includes(
-            term.toLowerCase(),
-          )
-        );
-        return foundAccounts.map((a) => ({
-          name: formatAccount(a),
-          value: a.id,
-        }));
-      },
+      choices: accounts.data.map((a) => ({
+        name: formatAccount(a),
+        value: a.id,
+      })),
+      default: defaultAccountId,
       pageSize: 20,
     });
+
+    const selectedAccount = accounts.data.find((a) => a.id === selectedAccountId);
+    if (!selectedAccount) {
+      throw new Error(`Selected account (ID: ${selectedAccountId}) not found. It may have been deleted.`);
+    }
+    return selectedAccount.id;
   }
 
   public static async selectTax(message: string): Promise<CashCtrlTax> {
@@ -120,35 +109,25 @@ export class CliHelpers {
     const formatTax = (tax: CashCtrlTax): string =>
       `${CashCtrlApi.getTranslation(tax.name)} (${tax.percentage}% ${tax.calcType})`;
 
-    const defaultTaxId = Number(Deno.env.get("CASHCTRL_DEFAULT_TAX"));
-    const defaultTax = taxes.data.find((t) => t.id === defaultTaxId);
-    if (defaultTax) {
-      message += ` (default: ${formatTax(defaultTax)})`;
-    }
+    // Handle case where default isn't set yet (during initialization)
+    const defaultTaxIdStr = Deno.env.get("CASHCTRL_DEFAULT_TAX");
+    const defaultTaxId = defaultTaxIdStr ? Number(defaultTaxIdStr) : undefined;
 
-    const selectedTaxId = await search({
+    const selectedTaxId = await select({
       message: message,
-      source: (term: string | undefined) => {
-        if (!term || term.length === 0) {
-          if (!defaultTax) return [];
-          return [{
-            name: formatTax(defaultTax),
-            value: defaultTaxId,
-          }];
-        }
-        const foundTaxes = taxes.data.filter((tax) =>
-          tax.name.toLowerCase().includes(term.toLowerCase()) ||
-          tax.percentage.toString().includes(term)
-        );
-        return foundTaxes.map((t) => ({
-          name: formatTax(t),
-          value: t.id,
-        }));
-      },
+      choices: taxes.data.map((t) => ({
+        name: formatTax(t),
+        value: t.id,
+      })),
+      default: defaultTaxId,
       pageSize: 20,
     });
 
-    return taxes.data.find((t) => t.id === selectedTaxId)!;
+    const selectedTax = taxes.data.find((t) => t.id === selectedTaxId);
+    if (!selectedTax) {
+      throw new Error(`Selected tax (ID: ${selectedTaxId}) not found. It may have been deleted.`);
+    }
+    return selectedTax;
   }
 
   public static async promptForEnvInput(
@@ -185,8 +164,8 @@ export class CliHelpers {
       const selectedTax = await CliHelpers.selectTax(
         "Select default tax",
       );
-      await CliHelpers.updateEnvFile(key, selectedTax.toString());
-      return selectedTax.toString();
+      await CliHelpers.updateEnvFile(key, selectedTax.id.toString());
+      return selectedTax.id.toString();
     }
     const answer = await inquirer.prompt([
       {
@@ -220,7 +199,7 @@ export class CliHelpers {
       lines.push(`${key}=${value}`);
     }
 
-    const newEnvContent = lines.join("\n");
+    const newEnvContent = lines.join("\n") + "\n"; // Add trailing newline
     await Deno.writeTextFile(envFilePath, newEnvContent);
     Deno.env.set(key, value);
   }
