@@ -1,5 +1,6 @@
 # Google Sheets to CashCtrl Orders
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/mbolli/cashctrl-google-sheets/releases/tag/v1.0.0)
 [![deno version](https://img.shields.io/badge/deno-^2.0-lightgrey?logo=deno)](https://deno.land)
 [![GitHub license](https://img.shields.io/github/license/mbolli/cashctrl-google-sheets)](https://github.com/mbolli/cashctrl-google-sheets/blob/master/LICENSE)
 [![Made with TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)](https://www.typescriptlang.org)
@@ -14,22 +15,57 @@ tracking simple and flexible.
 
 ## Features
 
-- Select order positions from your configured Google sheet
+- **Smart Configuration Management**
+  - Automatic first-run setup with interactive prompts
+  - Stores configuration in `.env` file
+  - Validates and guides you through required settings
+  
+- **Flexible Order Position Selection**
   - Filter by date span (column A)
   - Filter by client name (column B)
   - Always filters by `billed` flag (column H), so only unbilled positions are processed
-- Select data from your CashCtrl account
-  - Client/associate
-  - Document category
-  - Account
-- Create new order or modify existing one (replace or append order items)
-- Update the Google sheet (update `billed` flag)
+  
+- **CashCtrl Integration**
+  - Select client/associate
+  - Choose document category
+  - Pick account with formatted display
+  - **Dynamic tax selection** with NET/GROSS calcType support
+  - Create new orders or modify existing ones (replace or append items)
+  
+- **Automatic Updates**
+  - Updates Google Sheet `billed` flag after order creation
+  - Handles OAuth token refresh automatically
+  
+- **Enhanced User Experience**
+  - Graceful Ctrl-C handling with friendly messages
+  - Comprehensive error messages with actionable feedback
+  - Pre-selected defaults for faster workflow
 
 ## Demo
 
 ![google-sheets-cashctrl](https://github.com/user-attachments/assets/34d775a1-4071-409f-a5c1-6423e41abeba)
 
 ## Configuration
+
+### Environment Variables
+
+On first run, the application will prompt you for all required configuration. Settings are stored in a `.env` file:
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `SPREADSHEET_ID` | Google Sheets document ID (from URL) | Yes | - |
+| `GOOGLE_SHEET_NAME` | Name of the sheet tab | No | `Rechnungen` |
+| `CASHCTRL_DOMAINID` | CashCtrl subdomain (e.g., `yourcompany`) | Yes | - |
+| `CASHCTRL_APIKEY` | CashCtrl API key | Yes | - |
+| `CASHCTRL_ITEMS_ORDER` | Sort field for order items | No | `position` |
+| `CASHCTRL_DEFAULT_ACCOUNT` | Default account ID | Yes* | - |
+| `CASHCTRL_DEFAULT_TAX` | Default tax ID | Yes* | - |
+| `CASHCTRL_DEFAULT_CATEGORY` | Default category ID | No | `4` |
+| `CASHCTRL_UNIT_FILTER` | Unit name filter | No | `Std` |
+| `DATE_LOCALE` | Date formatting locale | No | `de-DE` |
+| `LANGUAGE` | CashCtrl UI language | No | `de` |
+
+*Set interactively on first run via selection prompts.
 
 ### Google API OAuth access
 
@@ -46,13 +82,19 @@ tracking simple and flexible.
 
 ## Usage
 
-1. Run the project with `deno run start`. The needed information will be
-   collected during this process.
-2. Follow the instructions in the console to authorize the app.
-3. Paste the authorization code received after authorization.
-4. Prepare your Google Sheet with the necessary order details.
-5. The order will be created in CashCtrl with positions taken from the Google
-   Sheet.
+1. **First Run**: Execute `deno run start` and follow the interactive setup:
+   - Configure environment variables (automatically saved to `.env`)
+   - Authorize Google Sheets access via OAuth (token saved to `token.json`)
+   - Select default account and tax settings
+   
+2. **Subsequent Runs**: Simply run `deno run start`:
+   - Select date range for unbilled positions
+   - Choose clients to include
+   - Review and confirm order positions
+   - Select or create CashCtrl order
+   - Positions are created and Google Sheet is updated automatically
+
+3. **Graceful Exit**: Press `Ctrl-C` at any time to exit cleanly
 
 ## Google Sheet Structure
 
