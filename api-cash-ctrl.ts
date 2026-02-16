@@ -1,18 +1,35 @@
-import { CashCtrlAnswer } from "./types.ts";
+import { CashCtrlAnswer, CashCtrlWriteResponse } from "./types.ts";
 
 /**
  * CashCtrl API class
  */
 export class CashCtrlApi {
   /**
-   * Make a request to the CashCtrl API using the given endpoint and method
-   * Note: The API key and domain ID are expected to be set as environment variables
+   * Make a GET request to the CashCtrl API
+   */
+  public static async request<T>(
+    endpoint: string,
+    method?: "GET",
+    body?: null,
+  ): Promise<CashCtrlAnswer<T>>;
+  
+  /**
+   * Make a POST request to the CashCtrl API
+   */
+  public static async request<T>(
+    endpoint: string,
+    method: "POST",
+    body: T,
+  ): Promise<CashCtrlWriteResponse>;
+
+  /**
+   * Implementation
    */
   public static async request<T>(
     endpoint: string,
     method: "POST" | "GET" = "GET",
-    body: T | null = null,
-  ): Promise<CashCtrlAnswer<T>> {
+    body?: T | null,
+  ): Promise<CashCtrlAnswer<T> | CashCtrlWriteResponse> {
     const url = `https://${
       Deno.env.get("CASHCTRL_DOMAINID")
     }.cashctrl.com/api/v1/${endpoint}`;

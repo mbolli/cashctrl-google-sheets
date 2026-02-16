@@ -22,6 +22,13 @@ export type CashCtrlAnswer<T> = {
   data: T;
 };
 
+export type CashCtrlWriteResponse = {
+  success: boolean;
+  message?: string;
+  insertId?: number;
+  errors?: Record<string, string[]>;
+};
+
 export type CashCtrlPerson = {
   id: number; // Unique identifier for the person
   created: string; // Creation date and time

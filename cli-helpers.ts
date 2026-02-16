@@ -1,6 +1,7 @@
 import type {
   CashCtrlAccount,
   CashCtrlAccountCategory,
+  CashCtrlTax,
   DateRange,
   SpreadsheetTable,
 } from "./types.ts";
@@ -111,6 +112,45 @@ export class CliHelpers {
     });
   }
 
+  public static async selectTax(message: string): Promise<CashCtrlTax> {
+    const taxes = await CashCtrlApi.request<CashCtrlTax[]>(
+      "/tax/list.json",
+    );
+
+    const formatTax = (tax: CashCtrlTax): string =>
+      `${CashCtrlApi.getTranslation(tax.name)} (${tax.percentage}% ${tax.calcType})`;
+
+    const defaultTaxId = Number(Deno.env.get("CASHCTRL_DEFAULT_TAX"));
+    const defaultTax = taxes.data.find((t) => t.id === defaultTaxId);
+    if (defaultTax) {
+      message += ` (default: ${formatTax(defaultTax)})`;
+    }
+
+    const selectedTaxId = await search({
+      message: message,
+      source: (term: string | undefined) => {
+        if (!term || term.length === 0) {
+          if (!defaultTax) return [];
+          return [{
+            name: formatTax(defaultTax),
+            value: defaultTaxId,
+          }];
+        }
+        const foundTaxes = taxes.data.filter((tax) =>
+          tax.name.toLowerCase().includes(term.toLowerCase()) ||
+          tax.percentage.toString().includes(term)
+        );
+        return foundTaxes.map((t) => ({
+          name: formatTax(t),
+          value: t.id,
+        }));
+      },
+      pageSize: 20,
+    });
+
+    return taxes.data.find((t) => t.id === selectedTaxId)!;
+  }
+
   public static async promptForEnvInput(
     key: string,
     message: string,
@@ -140,6 +180,13 @@ export class CliHelpers {
       );
       await CliHelpers.updateEnvFile(key, selectedAccount.toString());
       return selectedAccount.toString();
+    }
+    if (key === "CASHCTRL_DEFAULT_TAX") {
+      const selectedTax = await CliHelpers.selectTax(
+        "Select default tax",
+      );
+      await CliHelpers.updateEnvFile(key, selectedTax.toString());
+      return selectedTax.toString();
     }
     const answer = await inquirer.prompt([
       {

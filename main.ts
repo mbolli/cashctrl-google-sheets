@@ -7,7 +7,6 @@ import type {
   CashCtrlItem,
   CashCtrlOrder,
   CashCtrlPerson,
-  CashCtrlTax,
   CashCtrlUnit,
   SpreadsheetTable,
 } from "./types.ts";
@@ -36,6 +35,11 @@ Deno.env.get("CASHCTRL_DEFAULT_ACCOUNT") ||
   await CliHelpers.promptForEnvInput(
     "CASHCTRL_DEFAULT_ACCOUNT",
     "Please select your default CashCtrl account:",
+  );
+Deno.env.get("CASHCTRL_DEFAULT_TAX") ||
+  await CliHelpers.promptForEnvInput(
+    "CASHCTRL_DEFAULT_TAX",
+    "Please select your default CashCtrl tax:",
   );
 Deno.env.get("LANGUAGE") ||
   await CliHelpers.promptForEnvInput(
@@ -71,14 +75,17 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
   });
 
   const selectedAccount = await CliHelpers.selectAccount("Select account");
+  const selectedTax = await CliHelpers.selectTax("Select tax");
+  // For GROSS calcType: unitPrice must include tax (gross price)
+  // For NET calcType: unitPrice is net, CashCtrl adds tax on top
+  const taxMultiplier = selectedTax.calcType === "GROSS" 
+    ? 1 + (selectedTax.percentage / 100)
+    : 1;
 
   const units =
     (await CashCtrlApi.request<CashCtrlUnit[]>("/inventory/unit/list.json"))
       ?.data;
   const unit = units.filter((u) => u.name.includes("Std"))[0];
-  const taxes = (await CashCtrlApi.request<CashCtrlTax[]>("/tax/list.json"))
-    ?.data;
-  const tax = taxes.filter((t) => t.name.includes("MwSt. 8.1%"))[0];
   const categoryInfo = categories.data.find((c) => c.id === selectedCategory);
   const categoryName = CashCtrlApi.getTranslation(
     categoryInfo?.nameSingular ?? "",
@@ -124,7 +131,7 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
   let orderData: Partial<CashCtrlOrder> = {
     associateId: selectedAssociate,
     categoryId: selectedCategory,
-    date: (new Date()).toISOString().split("T")[0],
+    date: (new Date()).toISOString().split("T")[0], // set to 2025-12-31 to save in old year
     description: `${categoryName} ${localizedDate(dateRange.startDate)}-${
       localizedDate(dateRange.endDate)
     }`,
@@ -135,9 +142,9 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
       description: row.description,
       quantity: row.hours,
       type: "ARTICLE",
-      unitPrice: row.pricePerHour * 1.081, // apply tax
+      unitPrice: row.pricePerHour * taxMultiplier,
       unitId: unit.id,
-      taxId: tax.id,
+      taxId: selectedTax.id,
     } as Partial<CashCtrlItem>)),
     language: "DE",
     notes,
@@ -148,12 +155,15 @@ async function createOrder(sheetData: SpreadsheetTable): Promise<void> {
   }
   orderData.items = JSON.stringify(orderData.items);
 
-  const orderResponse = await CashCtrlApi.request<Partial<CashCtrlOrder>>(
+  const orderResponse = await CashCtrlApi.request(
     overrideOrder === null ? "/order/create.json" : "/order/update.json",
     "POST",
     orderData,
   );
-  console.log("Order created:", orderResponse);
+  if (orderResponse.success) console.log("Order created:", orderResponse);
+  else {
+      console.log("Order creation failed:", orderResponse);
+  }
 }
 
 async function updateSheet(sheetData: SpreadsheetTable): Promise<void> {
