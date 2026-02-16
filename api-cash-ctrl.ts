@@ -1,4 +1,5 @@
 import { CashCtrlAnswer, CashCtrlWriteResponse } from "./types.ts";
+import { Config } from "./config.ts";
 
 /**
  * CashCtrl API class
@@ -31,12 +32,12 @@ export class CashCtrlApi {
     body?: T | null,
   ): Promise<CashCtrlAnswer<T> | CashCtrlWriteResponse> {
     const url = `https://${
-      Deno.env.get("CASHCTRL_DOMAINID")
+      Config.get("CASHCTRL_DOMAINID")
     }.cashctrl.com/api/v1/${endpoint}`;
     const options: RequestInit = {
       method,
       headers: {
-        "Authorization": `Basic ${btoa(Deno.env.get("CASHCTRL_APIKEY") + ":")}`,
+        "Authorization": `Basic ${btoa(Config.get("CASHCTRL_APIKEY") + ":")}`,
       },
     };
 
@@ -52,14 +53,40 @@ export class CashCtrlApi {
       const response = await fetch(url, options);
 
       if (!response.ok) {
+        const errorText = await response.text();
         throw new Error(
-          `HTTP error! status: ${response.status} ${await response.text()}`,
+          `CashCtrl API error (${response.status}): ${errorText}`,
         );
       }
 
-      return response.json();
+      const data = await response.json();
+      
+      // Validate response structure for GET requests
+      if (method === "GET") {
+        if (!data || typeof data !== "object") {
+          throw new Error("Invalid API response: expected object");
+        }
+        if (!('data' in data)) {
+          throw new Error("Invalid API response: missing 'data' field");
+        }
+        if ('data' in data && data.data === null) {
+          throw new Error("API returned null data");
+        }
+      }
+      
+      // Validate response structure for POST requests
+      if (method === "POST") {
+        if (!data || typeof data !== "object") {
+          throw new Error("Invalid API response: expected object");
+        }
+        if (!('success' in data)) {
+          throw new Error("Invalid API response: missing 'success' field");
+        }
+      }
+
+      return data;
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("CashCtrl API request failed:", error);
       throw error;
     }
   }
@@ -105,7 +132,7 @@ export class CashCtrlApi {
    */
   public static getTranslation(data: string): string {
     if (!CashCtrlApi.isXmlLike(data)) return data;
-    return CashCtrlApi.parseXmlLike(data)[Deno.env.get("LANGUAGE") ?? "de"] ??
+    return CashCtrlApi.parseXmlLike(data)[Config.get("LANGUAGE")] ??
       data;
   }
 

@@ -1,6 +1,7 @@
 import { google } from "npm:googleapis";
 import { OAuth2Client } from "npm:google-auth-library";
 import { DateRange, SpreadsheetRow, SpreadsheetTable } from "./types.ts";
+import { Config } from "./config.ts";
 
 export class GoogleSheetsApi {
   private static SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
@@ -10,8 +11,14 @@ export class GoogleSheetsApi {
    * Authenticates with Google API using OAuth2.0.
    */
   private static async googleAuthenticate(): Promise<OAuth2Client> {
+    // Check if cached client is still valid
     if (this.client !== undefined) {
-      return this.client;
+      const credentials = this.client.credentials;
+      if (credentials.expiry_date && new Date(credentials.expiry_date*1000) > new Date()) {
+        return this.client;
+      }
+      // Token expired, clear cache and re-authenticate
+      console.log("Cached token has expired. Re-authenticating...");
     }
 
     const credentials = JSON.parse(
@@ -28,7 +35,8 @@ export class GoogleSheetsApi {
     try {
       const existingToken = await Deno.readTextFile("token.json");
       const tokenData = JSON.parse(existingToken);
-      if (new Date(tokenData.expiry_date * 1000) < new Date()) {
+      // Google tokens use milliseconds, not seconds
+      if (tokenData.expiry_date && new Date(tokenData.expiry_date*1000) < new Date()) {
         console.log("Token has expired. Please re-authorize.");
         throw new Error("Token has expired");
       }
@@ -71,14 +79,20 @@ export class GoogleSheetsApi {
     const authClient = await GoogleSheetsApi.googleAuthenticate();
     const sheets = google.sheets({ version: "v4", auth: authClient });
 
+    const sheetName = Config.get("GOOGLE_SHEET_NAME");
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: Deno.env.get("SPREADSHEET_ID"),
-      range: "Rechnungen!A1:J",
+      spreadsheetId: Config.get("SPREADSHEET_ID"),
+      range: `${sheetName}!A1:J`,
       valueRenderOption: "UNFORMATTED_VALUE",
     });
-    const convertDate = (dateVal: number) => {
+    
+    const convertDate = (dateVal: number | string): string => {
+      if (typeof dateVal === 'string') return dateVal;
       const date = new Date((dateVal - 25569) * 86400 * 1000);
-      return isNaN(date.getDate()) ? dateVal : date.toISOString().split("T")[0];
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date value in sheet: ${dateVal}`);
+      }
+      return date.toISOString().split("T")[0];
     }
 
     // convert to typed object SpreadsheetRow
@@ -113,13 +127,13 @@ export class GoogleSheetsApi {
     const authClient = await GoogleSheetsApi.googleAuthenticate();
     const sheets = google.sheets({ version: "v4", auth: authClient });
 
+    const sheetName = Config.get("GOOGLE_SHEET_NAME");
     try {
       const response = await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: Deno.env.get("SPREADSHEET_ID"),
+        spreadsheetId: Config.get("SPREADSHEET_ID"),
         requestBody: {
           data: positions.map(rowNumber => ({
-            // Assumes the sheet is named "Sheet1". Change if needed.
-            range: `Rechnungen!H${rowNumber}`,
+            range: `${sheetName}!H${rowNumber}`,
             values: [[true]]
           })),
           valueInputOption: 'USER_ENTERED' // Or 'RAW' if preferred.
@@ -152,14 +166,13 @@ export class GoogleSheetsApi {
     );
 
     // order items
-    const orderBy = (Deno.env.get("CASHCTRL_ITEMS_ORDER") ||
-      "client") as keyof SpreadsheetRow;
+    const orderBy = (Config.getOrDefault("CASHCTRL_ITEMS_ORDER", "client")) as keyof SpreadsheetRow;
     const values = Object.values(groupedPositions);
 
     return values.sort((a: SpreadsheetRow, b: SpreadsheetRow) =>
       String(a[orderBy]).localeCompare(
         String(b[orderBy]),
-        Deno.env.get("LANGUAGE"),
+        Config.get("LANGUAGE"),
         { numeric: true },
       )
     );
