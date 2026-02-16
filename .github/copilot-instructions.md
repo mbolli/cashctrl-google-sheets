@@ -4,16 +4,26 @@ This Deno TypeScript CLI bridges Google Sheets time tracking with CashCtrl invoi
 
 ## Architecture
 
-Three static utility classes handle distinct concerns:
+Four static utility classes handle distinct concerns:
 - **GoogleSheetsApi** ([api-google-sheets.ts](../api-google-sheets.ts)): OAuth2 flow, sheet reading/writing, data filtering/grouping
-- **CashCtrlApi** ([api-cash-ctrl.ts](../api-cash-ctrl.ts)): REST API calls, XML-like multilingual field parsing
-- **CliHelpers** ([cli-helpers.ts](../cli-helpers.ts)): Interactive prompts, .env management, account selection
+- **CashCtrlApi** ([api-cash-ctrl.ts](../api-cash-ctrl.ts)): REST API calls, XML-like multilingual field parsing, response validation
+- **CliHelpers** ([cli-helpers.ts](../cli-helpers.ts)): Interactive prompts, .env management, account/tax selection
+- **Config** ([config.ts](../config.ts)): Centralized configuration management, validation, and environment variable handling
 
-Main flow in [main.ts](../main.ts): Select date range → Fetch sheet data → Filter by clients → Group positions → Create order → Update billed flags.
+Main flow in [main.ts](../main.ts): Initialize config → Select date range → Fetch sheet data → Filter by clients → Group positions → Create order → Update billed flags.
 
 ## Critical Patterns
 
-**Google Sheets Structure**: Hardcoded sheet name `"Rechnungen"` with columns A-H:
+**Configuration Management**: All environment variables managed via Config class:
+```typescript
+Config.initialize();  // Prompts for missing config
+Config.get("KEY");    // Required config
+Config.getOrDefault("KEY", "default");  // Optional config
+Config.getNumber("KEY");  // Numeric config
+Config.validate();    // Validates format/structure
+```
+
+**Google Sheets Structure**: Configurable sheet name (default "Rechnungen") with columns A-H:
 ```typescript
 // Column mapping (0-indexed in code, 1-indexed in sheet)
 date | client | project | description | hours | pricePerHour | total | billed
@@ -26,14 +36,26 @@ Row numbers start at 1 due to `++i` in map operation. Always filter `billed === 
 // Use CashCtrlApi.getTranslation() to extract by LANGUAGE env var
 ```
 
-**Tax Application**: Hardcoded 8.1% tax applied to unit prices (`row.pricePerHour * 1.081`).
+**Tax Application**: Dynamic tax handling based on `calcType`:
+- **NET** (default): `unitPrice` is net, CashCtrl adds tax automatically
+- **GROSS**: `unitPrice = netPrice * (1 + percentage/100)`, CashCtrl extracts tax
 
-**Environment Variables**: Auto-prompts on first run via `CliHelpers.promptForEnvInput()`, writes to `.env`:
+**API Response Validation**: CashCtrlApi.request() validates all responses:
+- GET responses must have `data` field
+- POST responses must have `success` field
+- Throws descriptive errors on malformed responses
+
+**Environment Variables**: Auto-prompts on first run, writes to `.env`:
 - `SPREADSHEET_ID` - Google Sheets document ID
+- `GOOGLE_SHEET_NAME` - Sheet name (default: "Rechnungen")
 - `CASHCTRL_DOMAINID` - CashCtrl subdomain
 - `CASHCTRL_APIKEY` - CashCtrl API key
-- `CASHCTRL_ITEMS_ORDER` - Sort field for order items (client/date/hours/none)
+- `CASHCTRL_ITEMS_ORDER` - Sort field for order items
 - `CASHCTRL_DEFAULT_ACCOUNT` - Default account ID
+- `CASHCTRL_DEFAULT_TAX` - Default tax ID
+- `CASHCTRL_DEFAULT_CATEGORY` - Default category ID (default: 4)
+- `CASHCTRL_UNIT_FILTER` - Unit name filter (default: "Std")
+- `DATE_LOCALE` - Date formatting locale (default: "de-DE")
 - `LANGUAGE` - Locale code (default: 'de')
 
 **OAuth Persistence**: Google API tokens cached in `token.json` with expiry check.
@@ -57,16 +79,19 @@ deno check main.ts
 
 All types in [types.ts](../types.ts). Key patterns:
 - `SpreadsheetTable` is `SpreadsheetRow[]`
-- `CashCtrlAnswer<T>` wraps API responses: `{ total: number, data: T }`
-- Use `Partial<>` for create/update payloads (see `orderData` in [main.ts](../main.ts#L124))
+- `CashCtrlAnswer<T>` wraps GET responses: `{ total: number, data: T }`
+- `CashCtrlWriteResponse` wraps POST responses: `{ success: boolean, message?: string, insertId?: number, errors?: Record<string, string[]> }`
+- Use `Partial<>` for create/update payloads (see `orderData` in [main.ts](../main.ts))
 
 ## Common Gotchas
 
 - **No parallelism**: Sequential execution in main.ts. Await each step.
 - **Date conversion**: Google Sheets serial dates converted via `(dateVal - 25569) * 86400 * 1000`
-- **Order items JSON**: Must stringify items array before POST: `orderData.items = JSON.stringify(orderData.items)`
+- **Order items JSON**: When reading existing orders, items come as JSON string - must parse before merging
 - **Form encoding**: CashCtrlApi POST bodies use FormData, not JSON
-- **German defaults**: Date formatting and sorting use `de-DE` locale
+- **Locale defaults**: Date formatting uses configurable DATE_LOCALE (default: de-DE)
+- **Error handling**: All API responses validated; throws clear errors on missing/invalid data
+- **Token expiry**: Cached OAuth2 tokens checked for validity before reuse
 
 ## Extending Functionality
 
@@ -75,6 +100,8 @@ All types in [types.ts](../types.ts). Key patterns:
 **Custom order fields**: CashCtrl custom fields need XML encoding via `CashCtrlApi.encodeCustomField()`.
 
 **New prompt flows**: Use `@inquirer/prompts` for consistency (select/checkbox/input/confirm/search).
+
+**New configuration**: Add to `Config.initialize()` with appropriate defaults and validation.
 
 ## API References
 
