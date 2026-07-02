@@ -107,7 +107,7 @@ export class CliHelpers {
     );
 
     const formatTax = (tax: CashCtrlTax): string =>
-      `${CashCtrlApi.getTranslation(tax.name)} (${tax.percentage}% ${tax.calcType})`;
+      `${CashCtrlApi.getTranslation(tax.description)} (${CashCtrlApi.getCurrentTaxPercentage(tax)}% ${CashCtrlApi.getEffectiveTaxCalcType(tax)})`;
 
     // Handle case where default isn't set yet (during initialization)
     const defaultTaxIdStr = Deno.env.get("CASHCTRL_DEFAULT_TAX");

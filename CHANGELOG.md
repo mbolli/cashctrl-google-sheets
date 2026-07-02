@@ -45,10 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Descriptive error messages with actionable feedback
 
 ### Fixed
-- **OAuth Token Expiry Bug**: Token expiry check was incorrectly multiplying milliseconds by 1000
-  - Now correctly compares `expiry_date` timestamps directly
-  - Prevents unnecessary re-authentication flows
-  
 - **Type Safety**: Removed unsafe non-null assertions throughout codebase
   - Added proper validation after `find()` operations
   - Throws descriptive errors when selections are missing

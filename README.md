@@ -29,7 +29,7 @@ tracking simple and flexible.
   - Select client/associate
   - Choose document category
   - Pick account with formatted display
-  - **Dynamic tax selection** with NET/GROSS calcType support
+  - Pick tax (with NET/GROSS calcType support)
   - Create new orders or modify existing ones (replace or append items)
   
 - **Automatic Updates**

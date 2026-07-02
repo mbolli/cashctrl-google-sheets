@@ -251,7 +251,7 @@ export type CashCtrlItem = {
   unitPrice: number;
   discountPercentage: number | null; // Can be null
   pos: number;
-  taxName: string; // XML-like string
+  taxCode: string; // renamed from taxName in API v2.3.0
   taxAmount: number;
   defaultCurrencyUnitPrice: number;
   netUnitPrice: number;
@@ -279,7 +279,7 @@ export type CashCtrlAccount = {
   categoryDisplay: string; // XML-like string
   accountClass: string;
   taxId: number | null;
-  taxName: string | null;
+  taxCode: string | null; // renamed from taxName in API v2.3.0
   currencyId: number | null;
   currencyCode: string;
   number: string;
@@ -319,18 +319,31 @@ export type CashCtrlUnit = {
   name: string; // XML-like string
 };
 
+export type CashCtrlTaxComponent = {
+  code: string;
+  accountId: number;
+  calcType: "NET" | "GROSS";
+  applyRule: "CREDIT" | "DEBIT" | "REVENUE" | "EXPENSE" | "LEGACY_REV" | "LEGACY_EXP";
+};
+
+export type CashCtrlTaxRate = {
+  dateValid?: string; // ISO 8601 date, "valid from"
+  percentage: number;
+  percentageFlat?: number;
+};
+
 export type CashCtrlTax = {
   id: number;
   created: string; // ISO 8601 date string
   createdBy: string;
   lastUpdated: string; // ISO 8601 date string
   lastUpdatedBy: string;
-  accountId: number;
-  name: string; // XML-like string
+  code: string;
+  description: string; // XML-like string (was: name)
   documentName: string; // XML-like string
-  calcType: "NET" | "GROSS"; // Assuming these are the only possible values
-  percentage: number;
-  percentageFlat: number | null;
+  isDisplayTaxRate: boolean;
+  components: CashCtrlTaxComponent[];
+  rates: CashCtrlTaxRate[];
   text: string;
   accountDisplay: string; // XML-like string
   listCls: string;

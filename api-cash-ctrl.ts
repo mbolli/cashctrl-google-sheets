@@ -1,4 +1,4 @@
-import { CashCtrlAnswer, CashCtrlWriteResponse } from "./types.ts";
+import { CashCtrlAnswer, CashCtrlTax, CashCtrlWriteResponse } from "./types.ts";
 import { Config } from "./config.ts";
 
 /**
@@ -148,5 +148,32 @@ export class CashCtrlApi {
 
     xmlParts.push("</values>");
     return xmlParts.join("");
+  }
+
+  /**
+   * Get the currently applicable tax percentage from the rates array.
+   * Selects the rate whose dateValid is <= today (most recent wins).
+   * Falls back to the first rate if none qualify.
+   */
+  public static getCurrentTaxPercentage(tax: CashCtrlTax): number {
+    if (!tax.rates || tax.rates.length === 0) {
+      throw new Error(`Tax "${tax.code}" has no rates defined.`);
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const applicable = tax.rates
+      .filter((r) => !r.dateValid || r.dateValid <= today)
+      .sort((a, b) => (b.dateValid ?? "").localeCompare(a.dateValid ?? ""));
+    return (applicable[0] ?? tax.rates[0]).percentage;
+  }
+
+  /**
+   * Get the effective calcType from the tax components array.
+   * Assumes all components within a single tax share the same calcType.
+   */
+  public static getEffectiveTaxCalcType(tax: CashCtrlTax): "NET" | "GROSS" {
+    if (!tax.components || tax.components.length === 0) {
+      throw new Error(`Tax "${tax.code}" has no components defined.`);
+    }
+    return tax.components[0].calcType;
   }
 }
