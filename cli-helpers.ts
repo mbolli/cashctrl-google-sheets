@@ -1,12 +1,7 @@
-import type {
-  CashCtrlAccount,
-  CashCtrlAccountCategory,
-  CashCtrlTax,
-  DateRange,
-  SpreadsheetTable,
-} from "./types.ts";
+import type { DateRange, SpreadsheetTable } from "./types.ts";
+import type { Account, Tax } from "@zweiundeins/cashctrl-ts-sdk";
 import inquirer from "npm:inquirer";
-import { CashCtrlApi } from "./api-cash-ctrl.ts";
+import { cc, currentTaxPercentage, effectiveTaxCalcType, t } from "./cash-ctrl.ts";
 import { checkbox, select } from "npm:@inquirer/prompts";
 
 export class CliHelpers {
@@ -61,23 +56,19 @@ export class CliHelpers {
   }
 
   public static async selectAccount(message: string): Promise<number> {
-    const accounts = await CashCtrlApi.request<CashCtrlAccount[]>(
-      "/account/list.json",
-    );
-    const accountCategories = await CashCtrlApi.request<
-      CashCtrlAccountCategory[]
-    >(
-      "/account/category/list.json",
-    );
-    const accountCategoryMap: Record<number, string> = accountCategories.data
+    const [accounts, accountCategories] = await Promise.all([
+      cc().account.list(),
+      cc().account.category.list(),
+    ]);
+    const accountCategoryMap: Record<number, string> = accountCategories
       .reduce((acc, c) => {
-        acc[c.id] = CashCtrlApi.getTranslation(c.name);
+        acc[c.id] = t(c.name);
         return acc;
       }, {} as Record<number, string>);
 
-    const formatAccount = (account: CashCtrlAccount): string =>
+    const formatAccount = (account: Account): string =>
       `${accountCategoryMap[account.categoryId]} | ${account.number}: ${
-        CashCtrlApi.getTranslation(account.name)
+        t(account.name)
       }`;
 
     // Handle case where default isn't set yet (during initialization)
@@ -86,7 +77,7 @@ export class CliHelpers {
 
     const selectedAccountId = await select({
       message: message,
-      choices: accounts.data.map((a) => ({
+      choices: accounts.map((a) => ({
         name: formatAccount(a),
         value: a.id,
       })),
@@ -94,42 +85,42 @@ export class CliHelpers {
       pageSize: 20,
     });
 
-    const selectedAccount = accounts.data.find((a) => a.id === selectedAccountId);
+    const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
     if (!selectedAccount) {
       throw new Error(`Selected account (ID: ${selectedAccountId}) not found. It may have been deleted.`);
     }
     return selectedAccount.id;
   }
 
-  public static async selectTax(message: string): Promise<CashCtrlTax> {
-    const taxes = await CashCtrlApi.request<CashCtrlTax[]>(
-      "/tax/list.json",
-    );
+  public static async selectTax(message: string): Promise<Tax> {
+    const taxes = await cc().tax.list();
 
-    const formatTax = (tax: CashCtrlTax): string =>
-      `${CashCtrlApi.getTranslation(tax.description)} (${CashCtrlApi.getCurrentTaxPercentage(tax)}% ${CashCtrlApi.getEffectiveTaxCalcType(tax)})`;
+    const formatTax = (tax: Tax): string =>
+      `${t(tax.description)} (${currentTaxPercentage(tax)}% ${
+        effectiveTaxCalcType(tax)
+      })`;
 
     // Handle case where default isn't set yet (during initialization)
     const defaultTaxIdStr = Deno.env.get("CASHCTRL_DEFAULT_TAX");
     const defaultTaxId = defaultTaxIdStr ? Number(defaultTaxIdStr) : undefined;
 
     // Show active taxes first; inactive ones are rendered but not selectable.
-    const sortedTaxes = taxes.data
+    const sortedTaxes = taxes
       .slice()
       .sort((a, b) => Number(a.isInactive) - Number(b.isInactive));
 
     const selectedTaxId = await select({
       message: message,
-      choices: sortedTaxes.map((t) => ({
-        name: formatTax(t),
-        value: t.id,
-        disabled: t.isInactive ? "(inactive)" : false,
+      choices: sortedTaxes.map((tax) => ({
+        name: formatTax(tax),
+        value: tax.id,
+        disabled: tax.isInactive ? "(inactive)" : false,
       })),
       default: defaultTaxId,
       pageSize: 20,
     });
 
-    const selectedTax = taxes.data.find((t) => t.id === selectedTaxId);
+    const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
     if (!selectedTax) {
       throw new Error(`Selected tax (ID: ${selectedTaxId}) not found. It may have been deleted.`);
     }

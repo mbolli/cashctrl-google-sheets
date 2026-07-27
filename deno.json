@@ -1,14 +1,24 @@
 {
   "version": "1.0.0",
   "compilerOptions": {
-    "lib": ["deno.window"],
-    "types": ["npm:@types/inquirer", "types.ts"]
+    "lib": [
+      "deno.window"
+    ],
+    "types": [
+      "npm:@types/inquirer",
+      "types.ts"
+    ]
   },
   "nodeModulesDir": "auto",
   "lint": {
-    "include": ["**/*.ts"]
+    "include": [
+      "**/*.ts"
+    ]
   },
   "tasks": {
     "start": "deno run --allow-read --allow-net --allow-env --allow-write --env-file main.ts"
+  },
+  "imports": {
+    "@zweiundeins/cashctrl-ts-sdk": "../cashctrl-ts-sdk/src/mod.ts"
   }
 }

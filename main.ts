@@ -1,17 +1,17 @@
 import { select, confirm, input } from "npm:@inquirer/prompts";
 import { GoogleSheetsApi } from "./api-google-sheets.ts";
-import { CashCtrlApi } from "./api-cash-ctrl.ts";
 import { CliHelpers } from "./cli-helpers.ts";
 import { Config } from "./config.ts";
+import { cc, currentTaxPercentage, effectiveTaxCalcType, t } from "./cash-ctrl.ts";
+import { CashCtrlValidationError } from "@zweiundeins/cashctrl-ts-sdk";
 import type {
-  CashCtrlCategory,
-  CashCtrlItem,
-  CashCtrlOrder,
-  CashCtrlPerson,
-  CashCtrlUnit,
-  DateRange,
-  SpreadsheetTable,
-} from "./types.ts";
+  Order,
+  OrderCreateParams,
+} from "@zweiundeins/cashctrl-ts-sdk";
+import type { DateRange, SpreadsheetTable } from "./types.ts";
+
+/** One entry of the `items` array accepted by order create/update. */
+type OrderItem = NonNullable<OrderCreateParams["items"]>[number];
 
 // Gracefully handle Ctrl-C (SIGINT)
 Deno.addSignalListener("SIGINT", () => {
@@ -37,21 +37,17 @@ try {
 }
 
 async function createOrder(sheetData: SpreadsheetTable, dateRange: DateRange): Promise<void> {
-  const associates = await CashCtrlApi.request<CashCtrlPerson[]>(
-    "/person/list.json",
-  );
+  const associates = await cc().person.list();
   const selectedAssociate = await select({
     message: "Select associate",
-    choices: associates.data.map((a) => ({ name: a.name, value: a.id })),
+    choices: associates.map((a) => ({ name: a.name, value: a.id })),
   });
 
-  const categories = await CashCtrlApi.request<CashCtrlCategory[]>(
-    "/order/category/list.json",
-  );
+  const categories = await cc().order.category.list();
   const selectedCategory = await select({
     message: "Select document category",
-    choices: categories.data.map((c) => ({
-      name: CashCtrlApi.getTranslation(c.nameSingular),
+    choices: categories.map((c) => ({
+      name: t(c.nameSingular),
       value: c.id,
     })),
     default: Config.getNumber("CASHCTRL_DEFAULT_CATEGORY"),
@@ -63,44 +59,56 @@ async function createOrder(sheetData: SpreadsheetTable, dateRange: DateRange): P
   // CashCtrl reads unitPrice as gross, so gross it up by the tax rate to keep
   // each position's net total equal to the sheet amount. For a NET tax,
   // CashCtrl adds the tax on top, so the net rate is sent unchanged.
-  const taxMultiplier = CashCtrlApi.getEffectiveTaxCalcType(selectedTax) === "GROSS"
-    ? 1 + (CashCtrlApi.getCurrentTaxPercentage(selectedTax) / 100)
+  const taxMultiplier = effectiveTaxCalcType(selectedTax) === "GROSS"
+    ? 1 + (currentTaxPercentage(selectedTax) / 100)
     : 1;
 
-  const units =
-    (await CashCtrlApi.request<CashCtrlUnit[]>("/inventory/unit/list.json"))
-      ?.data;
+  const units = await cc().inventory.unit.list();
   const unitFilter = Config.get("CASHCTRL_UNIT_FILTER");
   const unit = units.find((u) => u.name.includes(unitFilter));
   if (!unit) {
-    throw new Error(`No unit found matching filter '${unitFilter}'. Available units: ${units.map(u => CashCtrlApi.getTranslation(u.name)).join(", ")}`);
+    throw new Error(
+      `No unit found matching filter '${unitFilter}'. Available units: ${
+        units.map((u) => t(u.name)).join(", ")
+      }`,
+    );
   }
-  const categoryInfo = categories.data.find((c) => c.id === selectedCategory);
-  const categoryName = CashCtrlApi.getTranslation(
-    categoryInfo?.nameSingular ?? "",
-  );
+  const categoryInfo = categories.find((c) => c.id === selectedCategory);
+  const categoryName = t(categoryInfo?.nameSingular ?? "");
 
-  let overrideOrder: CashCtrlOrder|null = null;
+  let overrideOrder: Order | null = null;
   let replaceItems = false;
-  if (await confirm({message: `Update an existing ${categoryName}? This will only touch the order items/positions.`, default: false})) {
-    const queryParams = new URLSearchParams({
-      categoryId: categoryInfo?.id?.toString() ?? '',
-      onlyOpen: 'true',
-      filter: JSON.stringify([{
-        comparison: 'eq',
-        field: 'associateId',
-        value: selectedAssociate.toString()
-      }])
+  if (
+    await confirm({
+      message:
+        `Update an existing ${categoryName}? This will only touch the order items/positions.`,
+      default: false,
+    })
+  ) {
+    // The SDK serializes `filter` to JSON and builds the query string.
+    const orders = await cc().order.list({
+      categoryId: categoryInfo?.id,
+      onlyOpen: true,
+      filter: [{
+        comparison: "eq",
+        field: "associateId",
+        value: selectedAssociate,
+      }],
     });
-    const orders = await CashCtrlApi.request<CashCtrlOrder[]>(`/order/list.json?${queryParams.toString()}`);
     const overrideOrderId = await select({
       message: "Select order to update",
-      choices: orders.data.map(o => ({ name: `${o.nr}: ${o.description ?? ''}`, value: o.id}))
+      choices: orders.map((o) => ({
+        name: `${o.nr}: ${o.description ?? ""}`,
+        value: o.id,
+      })),
     });
-    const overrideOrderRequest = await CashCtrlApi.request<CashCtrlOrder>(`/order/read.json?id=${overrideOrderId}`);
-    overrideOrder = overrideOrderRequest.data;
+    overrideOrder = await cc().order.read({ id: overrideOrderId });
 
-    replaceItems = await confirm({message: `Replace ${overrideOrder.nr} order items with selected Google sheet rows? Default is to append them.`, default: false});
+    replaceItems = await confirm({
+      message:
+        `Replace ${overrideOrder.nr} order items with selected Google sheet rows? Default is to append them.`,
+      default: false,
+    });
   }
 
   let notes = null;
@@ -117,60 +125,73 @@ async function createOrder(sheetData: SpreadsheetTable, dateRange: DateRange): P
     return date.toLocaleDateString(Config.get("DATE_LOCALE"), options);
   };
 
-  let orderData: Partial<CashCtrlOrder> = {
+  const items: OrderItem[] = sheetData.map((row) => ({
+    accountId: selectedAccount,
+    name: `${row.client}: ${row.project}`,
+    description: row.description,
+    quantity: row.hours,
+    type: "ARTICLE",
+    unitPrice: row.pricePerHour * taxMultiplier,
+    unitId: unit.id,
+    taxId: selectedTax.id,
+  }));
+
+  if (overrideOrder && !replaceItems) {
+    // Appending: keep the order's current positions in front of the new ones.
+    // Read results carry computed fields (netTotal, taxAmount, pos, ...) that
+    // update does not accept, so project each one down to its writable parts.
+    const existingItems: OrderItem[] = (overrideOrder.items ?? []).map((i) => ({
+      accountId: i.accountId,
+      name: i.name,
+      unitPrice: i.unitPrice,
+      articleNr: i.articleNr ?? undefined,
+      description: i.description ?? undefined,
+      discountPercentage: i.discountPercentage ?? undefined,
+      inventoryId: i.inventoryId ?? undefined,
+      quantity: i.quantity ?? undefined,
+      taxId: i.taxId ?? undefined,
+      type: i.type as OrderItem["type"],
+      unitId: i.unitId ?? undefined,
+    }));
+    items.unshift(...existingItems);
+  }
+
+  const orderFields = {
     associateId: selectedAssociate,
     categoryId: selectedCategory,
-    date: (new Date()).toISOString().split("T")[0], // set to 2025-12-31 to save in old year
+    date: new Date(), // set explicitly to book into an earlier period
     description: `${categoryName} ${localizedDate(dateRange.startDate)}-${
       localizedDate(dateRange.endDate)
     }`,
     dueDays: 10,
-    items: sheetData.map((row) => ({
-      accountId: selectedAccount,
-      name: `${row.client}: ${row.project}`,
-      description: row.description,
-      quantity: row.hours,
-      type: "ARTICLE",
-      unitPrice: row.pricePerHour * taxMultiplier,
-      unitId: unit.id,
-      taxId: selectedTax.id,
-    } as Partial<CashCtrlItem>)),
-    language: "DE",
-    notes,
+    items,
+    language: "DE" as const,
+    ...(notes === null ? {} : { notes }),
   };
-  if (overrideOrder !== null && replaceItems === false) {
-    // Parse items from API response (comes as JSON string)
-    const existingItems = typeof overrideOrder.items === 'string' 
-      ? JSON.parse(overrideOrder.items) as Partial<CashCtrlItem>[]
-      : overrideOrder.items;
-    
-    if (Array.isArray(existingItems) && Array.isArray(orderData.items)) {
-      orderData.items = [...existingItems, ...orderData.items];
-    }
-    // Preserve other order fields when updating
-    orderData = { ...overrideOrder, ...orderData };
-  }
-  orderData.items = JSON.stringify(orderData.items);
 
-  const orderResponse = await CashCtrlApi.request(
-    overrideOrder === null ? "/order/create.json" : "/order/update.json",
-    "POST",
-    orderData,
-  );
-  
-  if (orderResponse.success) {
-    const action = overrideOrder === null ? "created" : "updated";
-    console.log(`✓ Order ${action} successfully:`, {
-      insertId: orderResponse.insertId,
-      message: orderResponse.message,
+  const action = overrideOrder === null ? "created" : "updated";
+  try {
+    // `update` replaces the whole record, so `updatePreserving` resends the
+    // order's current values for everything this function does not set.
+    const response = overrideOrder === null
+      ? await cc().order.create(orderFields)
+      : await cc().order.updatePreserving(overrideOrder, {
+        ...orderFields,
+        id: overrideOrder.id,
+      });
+
+    console.log(`\u2713 Order ${action} successfully:`, {
+      insertId: response.insertId,
+      message: response.message,
     });
-  } else {
-    const action = overrideOrder === null ? "creation" : "update";
-    console.error(`✗ Order ${action} failed:`, {
-      message: orderResponse.message,
-      errors: orderResponse.errors,
-    });
-    throw new Error(`Order ${action} failed: ${orderResponse.message}`);
+  } catch (error) {
+    if (error instanceof CashCtrlValidationError) {
+      console.error(`\u2717 Order ${action === "created" ? "creation" : "update"} failed:`);
+      for (const [field, messages] of Object.entries(error.byField())) {
+        console.error(`  ${field}: ${messages.join(", ")}`);
+      }
+    }
+    throw error;
   }
 }
 
