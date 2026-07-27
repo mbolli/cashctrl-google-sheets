@@ -113,11 +113,17 @@ export class CliHelpers {
     const defaultTaxIdStr = Deno.env.get("CASHCTRL_DEFAULT_TAX");
     const defaultTaxId = defaultTaxIdStr ? Number(defaultTaxIdStr) : undefined;
 
+    // Show active taxes first; inactive ones are rendered but not selectable.
+    const sortedTaxes = taxes.data
+      .slice()
+      .sort((a, b) => Number(a.isInactive) - Number(b.isInactive));
+
     const selectedTaxId = await select({
       message: message,
-      choices: taxes.data.map((t) => ({
+      choices: sortedTaxes.map((t) => ({
         name: formatTax(t),
         value: t.id,
+        disabled: t.isInactive ? "(inactive)" : false,
       })),
       default: defaultTaxId,
       pageSize: 20,

@@ -157,7 +157,7 @@ export class CashCtrlApi {
    */
   public static getCurrentTaxPercentage(tax: CashCtrlTax): number {
     if (!tax.rates || tax.rates.length === 0) {
-      throw new Error(`Tax "${tax.code}" has no rates defined.`);
+      return 0;
     }
     const today = new Date().toISOString().slice(0, 10);
     const applicable = tax.rates
@@ -167,13 +167,10 @@ export class CashCtrlApi {
   }
 
   /**
-   * Get the effective calcType from the tax components array.
-   * Assumes all components within a single tax share the same calcType.
+   * Get the effective calcType for the tax. Uses the authoritative
+   * `isGrossCalcType` flag so it never throws on taxes without components.
    */
   public static getEffectiveTaxCalcType(tax: CashCtrlTax): "NET" | "GROSS" {
-    if (!tax.components || tax.components.length === 0) {
-      throw new Error(`Tax "${tax.code}" has no components defined.`);
-    }
-    return tax.components[0].calcType;
+    return tax.isGrossCalcType ? "GROSS" : "NET";
   }
 }

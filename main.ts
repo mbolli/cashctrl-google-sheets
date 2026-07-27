@@ -59,8 +59,10 @@ async function createOrder(sheetData: SpreadsheetTable, dateRange: DateRange): P
 
   const selectedAccount = await CliHelpers.selectAccount("Select account");
   const selectedTax = await CliHelpers.selectTax("Select tax");
-  // For GROSS calcType: unitPrice must include tax (gross price)
-  // For NET calcType: unitPrice is net, CashCtrl adds tax on top
+  // Sheet rates are net. For a GROSS calcType tax (e.g. Saldosteuersatz),
+  // CashCtrl reads unitPrice as gross, so gross it up by the tax rate to keep
+  // each position's net total equal to the sheet amount. For a NET tax,
+  // CashCtrl adds the tax on top, so the net rate is sent unchanged.
   const taxMultiplier = CashCtrlApi.getEffectiveTaxCalcType(selectedTax) === "GROSS"
     ? 1 + (CashCtrlApi.getCurrentTaxPercentage(selectedTax) / 100)
     : 1;
