@@ -19,6 +19,6 @@
     "start": "deno run --allow-read --allow-net --allow-env --allow-write --env-file main.ts"
   },
   "imports": {
-    "@zweiundeins/cashctrl-ts-sdk": "../cashctrl-ts-sdk/src/mod.ts"
+    "@zweiundeins/cashctrl-ts-sdk": "jsr:@zweiundeins/cashctrl-ts-sdk@^0.2.0"
   }
 }
